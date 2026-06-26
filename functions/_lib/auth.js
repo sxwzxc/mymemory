@@ -11,6 +11,41 @@
 const SESSION_COOKIE = 'mm_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 天
 
+// ---------- 容量与格式限制 ----------
+// 单用户记忆条数上限（防止撑爆 KV 单 value ~25MB 限制后静默失败）
+const MAX_MEMORIES_PER_USER = 2000;
+// 单条记忆 value 最大字节数（约 256KB，防止超大文本拖慢整体读写）
+const MAX_VALUE_BYTES = 256 * 1024;
+// 允许的 key 格式：字母数字下划线/连字符，长度 1-128
+const KEY_PATTERN = /^[a-zA-Z0-9_-]{1,128}$/;
+
+export function validateMemoryKey(key) {
+  return typeof key === 'string' && KEY_PATTERN.test(key);
+}
+
+export function validateMemoryValue(value) {
+  if (typeof value !== 'string') return { ok: false, reason: 'value 必须是字符串' };
+  // UTF-8 字节长度
+  const bytes = new TextEncoder().encode(value).length;
+  if (bytes > MAX_VALUE_BYTES) {
+    return {
+      ok: false,
+      reason: `单条内容不能超过 ${MAX_VALUE_BYTES} 字节（当前 ${bytes} 字节）`,
+    };
+  }
+  return { ok: true };
+}
+
+export function checkMemoryLimit(currentCount, addCount) {
+  if (currentCount + addCount > MAX_MEMORIES_PER_USER) {
+    return {
+      ok: false,
+      reason: `记忆条数上限为 ${MAX_MEMORIES_PER_USER} 条（当前 ${currentCount} 条，本次将超过上限）`,
+    };
+  }
+  return { ok: true };
+}
+
 // ---------- KV 绑定解析 ----------
 // EdgeOne Pages 把绑定的 KV 命名空间以「变量名」注入为全局变量
 // （见 https://pages.edgeone.ai/zh/document/kv-storage ，示例用 my_kv）。

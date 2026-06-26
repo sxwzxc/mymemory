@@ -190,6 +190,53 @@ export async function deleteMemory(key: string): Promise<{ message: string }> {
   return data;
 }
 
+// ---------- 导入 / 导出（cookie 鉴权，浏览器用） ----------
+
+export interface MemoryExport {
+  version: number;
+  exportedAt: string;
+  count: number;
+  items: Memory[];
+}
+
+export interface ImportResult {
+  message: string;
+  imported: number;
+  skippedExist: number;
+  skippedInvalid: number;
+  errors: string[];
+  totalAfter: number;
+}
+
+// 触发浏览器下载导出文件
+export function exportMemoriesUrl(): string {
+  return `${API_HOST}/memories/export`;
+}
+
+export async function exportMemories(): Promise<MemoryExport> {
+  const res = await fetch(`${API_HOST}/memories/export`, {
+    credentials: CREDENTIALS,
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+export async function importMemories(
+  items: Memory[] | { items: Memory[] }
+): Promise<ImportResult> {
+  const body = Array.isArray(items) ? { items } : items;
+  const res = await fetch(`${API_HOST}/memories/import`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: CREDENTIALS,
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
 // ---------- API Key 管理 ----------
 
 export async function listApiKeys(): Promise<ApiKeyInfo[]> {

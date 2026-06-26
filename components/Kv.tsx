@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   listMemories,
   addMemory,
   updateMemory,
   deleteMemory,
+  exportMemories,
+  importMemories,
   formatSkillAsPrompt,
   SKILL_TEMPLATES,
   SKILL_CATEGORY_LABELS,
@@ -251,6 +253,48 @@ export default function MemoryPanel({
     }
   };
 
+  // 导入/导出
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = async () => {
+    try {
+      const data = await exportMemories();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.href = url;
+      a.download = `mymemory-backup-${stamp}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message || '导出失败');
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setImportBusy(true);
+      setImportResult(null);
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const result = await importMemories(parsed);
+      setImportResult(result.message);
+      await fetchMemories();
+    } catch (err: any) {
+      setImportResult(err.message || '导入失败：请检查文件格式');
+    } finally {
+      setImportBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/40 to-slate-950 flex items-center justify-center p-4">
@@ -305,6 +349,29 @@ export default function MemoryPanel({
                   📖 说明
                 </button>
               )}
+              <button
+                onClick={handleExport}
+                disabled={memories.length === 0}
+                className="px-3 py-2.5 bg-slate-800/60 text-slate-300 rounded-xl font-medium hover:bg-slate-700/60 transition text-sm border border-slate-700/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="导出全部记忆为 JSON 备份文件"
+              >
+                ⬇ 导出
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importBusy}
+                className="px-3 py-2.5 bg-slate-800/60 text-slate-300 rounded-xl font-medium hover:bg-slate-700/60 transition text-sm border border-slate-700/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="从 JSON 备份文件导入记忆（同 key 自动跳过）"
+              >
+                {importBusy ? '导入中...' : '⬆ 导入'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={handleImportFile}
+                className="hidden"
+              />
               {onShowApiKeys && (
                 <button
                   onClick={onShowApiKeys}
@@ -331,6 +398,19 @@ export default function MemoryPanel({
               </button>
             </div>
           </div>
+
+          {/* 导入结果提示 */}
+          {importResult && (
+            <div className="mt-3 flex items-center justify-between gap-3 text-sm bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2.5">
+              <span className="text-emerald-300">{importResult}</span>
+              <button
+                onClick={() => setImportResult(null)}
+                className="text-emerald-400/70 hover:text-emerald-200 transition text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* 搜索栏 */}
           <div className="mt-4 flex gap-2">

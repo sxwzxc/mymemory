@@ -190,6 +190,8 @@ export default function Guide({ apiHost, onBack }: GuideProps) {
                 { m: 'GET', p: '/api/memories/get?key=KEY', d: '获取单条' },
                 { m: 'POST', p: '/api/memories/set', d: '新增 / 更新（body: {key,value,meta}）' },
                 { m: 'DELETE', p: '/api/memories/delete?key=KEY', d: '删除单条' },
+                { m: 'GET', p: '/api/memories/export', d: '导出全部为 JSON 备份' },
+                { m: 'POST', p: '/api/memories/import', d: '批量导入（body: {items:[...]}）' },
               ].map((row) => (
                 <div key={row.p} className="flex items-center gap-3 text-sm">
                   <span className="inline-block w-16 text-center px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[11px] font-mono">
@@ -204,6 +206,29 @@ export default function Guide({ apiHost, onBack }: GuideProps) {
               <p className="text-xs text-slate-500 mb-2">curl 示例：</p>
               <CodeBlock>{`curl -H "Authorization: Bearer mm_xxxxxxxx" \\
   ${host}/api/memories`}</CodeBlock>
+            </div>
+          </div>
+        </section>
+
+        {/* 备份与迁移 */}
+        <section id="backup" className="scroll-mt-20">
+          <h2 className="text-xl font-semibold text-slate-100 mb-1">备份与迁移</h2>
+          <p className="text-slate-500 text-sm mb-4">数据存于 EdgeOne KV，无传统数据库，请定期导出备份。</p>
+          <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-6 space-y-4 text-sm text-slate-300 leading-7">
+            <div>
+              <p className="text-slate-200 font-medium mb-1.5">📦 浏览器导出（推荐）</p>
+              <p className="text-slate-400">在记忆库头部点「⬇ 导出」按钮，浏览器会下载一份 <code className="text-purple-300 bg-slate-950/60 px-1.5 py-0.5 rounded">mymemory-backup-时间戳.json</code> 文件，包含你全部记忆与 Skill 的完整内容与元数据。</p>
+            </div>
+            <div>
+              <p className="text-slate-200 font-medium mb-1.5">⬆ 浏览器导入</p>
+              <p className="text-slate-400">点「⬆ 导入」选择之前导出的 JSON 文件即可批量回导。<span className="text-amber-300">同 key 的条目会自动跳过（不覆盖）</span>，已存在的记忆不会被破坏。导入后会显示统计：新增 / 跳过已存在 / 跳过无效。</p>
+            </div>
+            <div>
+              <p className="text-slate-200 font-medium mb-1.5">🔌 API 导入导出</p>
+              <p className="text-slate-400">用 API Key 调用 <code className="text-purple-300 bg-slate-950/60 px-1.5 py-0.5 rounded">GET /api/memories/export</code> 与 <code className="text-purple-300 bg-slate-950/60 px-1.5 py-0.5 rounded">POST /api/memories/import</code>，可在脚本中实现定时备份或跨实例迁移。</p>
+            </div>
+            <div className="pt-3 border-t border-slate-800 text-xs text-slate-500">
+              容量保护：单用户最多 2000 条，单条 value 最大 256KB，超出会被拒绝写入。
             </div>
           </div>
         </section>
