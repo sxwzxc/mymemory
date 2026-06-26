@@ -57,14 +57,16 @@ npx edgeone pages dev --port 8088
 
 ## 数据模型（基于 KV）
 
-本项目**没有传统数据库**，所有状态都存储在 EdgeOne KV 中。设计上让每个用户在 KV 中成为**独立的一个变量**，天然实现多租户隔离：
+本项目**没有传统数据库**，所有状态都存储在 EdgeOne KV 中。设计上让每个用户在 KV 中成为**独立的一个变量**，天然实现多租户隔离。
+
+> ⚠️ EdgeOne KV 的 key **仅支持数字、字母、下划线**，不能使用冒号等符号（会报 `Param Invalid`）。因此本项目所有 key 一律用下划线分段。用户名也限制为 `[a-zA-Z0-9_]`（3-32 位），因为它会成为 key 的一部分。
 
 | Key | Value（JSON） | 作用 |
 | --- | --- | --- |
-| `user:<username>` | `{ username, passwordHash, salt, iterations, createdAt, apiKeys[] }` | 账户信息。密码使用 PBKDF2-SHA256（10w 次迭代 + 16 字节 salt）加盐哈希 |
-| `memories:<username>` | `[{ key, value, meta }]` | 该用户**全部**记忆，整体作为一个 KV value 存储 |
-| `session:<token>` | `{ username, createdAt, expiresAt }` | 会话。token 经 HttpOnly Cookie 下发，过期时间同时写入 value（不依赖 KV 原生 TTL，跨平台兼容） |
-| `apikey:<sha256>` | `{ username, keyId }` | API Key → 用户名的反向索引，O(1) 鉴权。明文密钥不存储，只存哈希 |
+| `user_<username>` | `{ username, passwordHash, salt, iterations, createdAt, apiKeys[] }` | 账户信息。密码使用 PBKDF2-SHA256（10w 次迭代 + 16 字节 salt）加盐哈希 |
+| `memories_<username>` | `[{ key, value, meta }]` | 该用户**全部**记忆，整体作为一个 KV value 存储 |
+| `session_<token>` | `{ username, createdAt, expiresAt }` | 会话。token 经 HttpOnly Cookie 下发，过期时间同时写入 value（不依赖 KV 原生 TTL，跨平台兼容） |
+| `apikey_<sha256>` | `{ username, keyId }` | API Key → 用户名的反向索引，O(1) 鉴权。明文密钥不存储，只存哈希 |
 
 注册时自动为该用户写入一条「欢迎示例」记忆。
 

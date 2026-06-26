@@ -102,7 +102,7 @@ export default function Auth({ allowRegister, onAuthenticated }: AuthProps) {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="字母/数字/_-.，3-32 位"
+                placeholder="字母/数字/下划线，3-32 位"
                 required
                 autoComplete="username"
                 className="w-full px-4 py-3 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition"
