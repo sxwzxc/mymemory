@@ -191,17 +191,32 @@ export async function sha256Hex(text) {
   return buf2hex(digest);
 }
 
+// 把任意 BufferSource（TypedArray / ArrayBuffer）规范化为纯 ArrayBuffer。
+// EdgeOne 运行时的 WebCrypto 对 PBKDF2 的 salt / importKey 的 keyData 等参数
+// 校验较严：传入 Uint8Array 会报 "Param Invalid"（只接受 ArrayBuffer）。
+function toArrayBuffer(input) {
+  if (input instanceof ArrayBuffer) return input;
+  if (ArrayBuffer.isView(input)) {
+    const view = new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+    // 复制到独立的 ArrayBuffer，避免 view 带偏移
+    return view.slice().buffer;
+  }
+  throw new Error('toArrayBuffer: 不支持的输入类型');
+}
+
 export async function hashPassword(password, salt, iterations = PBKDF2_ITERATIONS) {
   const enc = new TextEncoder();
+  const passwordBuf = toArrayBuffer(enc.encode(password));
+  const saltBuf = toArrayBuffer(enc.encode(salt));
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    enc.encode(password),
+    passwordBuf,
     { name: 'PBKDF2' },
     false,
     ['deriveBits']
   );
   const derived = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: enc.encode(salt), iterations, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: saltBuf, iterations, hash: 'SHA-256' },
     keyMaterial,
     256
   );
