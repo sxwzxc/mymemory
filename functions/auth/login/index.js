@@ -36,8 +36,7 @@ export async function onRequest({ request, env }) {
       );
     }
 
-    const iterations = user.iterations || 100000;
-    const hash = await hashPassword(password, user.salt, iterations);
+    const hash = await hashPassword(password, user.salt);
     if (hash !== user.passwordHash) {
       return jsonResponse(
         { error: '用户名或密码错误' },

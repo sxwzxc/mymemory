@@ -10,7 +10,6 @@
 
 const SESSION_COOKIE = 'mm_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 天
-const PBKDF2_ITERATIONS = 100000;
 
 // ---------- KV 绑定解析 ----------
 // EdgeOne Pages 把绑定的 KV 命名空间以「变量名」注入为全局变量
@@ -192,8 +191,8 @@ export async function sha256Hex(text) {
 }
 
 // 把任意 BufferSource（TypedArray / ArrayBuffer）规范化为纯 ArrayBuffer。
-// EdgeOne 运行时的 WebCrypto 对 PBKDF2 的 salt / importKey 的 keyData 等参数
-// 校验较严：传入 Uint8Array 会报 "Param Invalid"（只接受 ArrayBuffer）。
+// EdgeOne 运行时的 WebCrypto 对 keyData / data 参数校验较严，
+// 传入 Uint8Array 会报 "Param Invalid"（只接受 ArrayBuffer）。
 function toArrayBuffer(input) {
   if (input instanceof ArrayBuffer) return input;
   if (ArrayBuffer.isView(input)) {
@@ -204,23 +203,25 @@ function toArrayBuffer(input) {
   throw new Error('toArrayBuffer: 不支持的输入类型');
 }
 
-export async function hashPassword(password, salt, iterations = PBKDF2_ITERATIONS) {
+// 密码哈希：HMAC-SHA256(password, key=salt)
+// 设计原因：EdgeOne 边缘运行时的 WebCrypto 对 PBKDF2 的 deriveBits()
+// 尚未支持（官方算法支持表标注"即将支持"），调用即报 Param Invalid。
+// 而 HMAC 的 importKey() 与 sign() 均在已支持列表内，因此改用
+// HMAC-SHA256 加 per-user salt 做密码哈希。
+// salt 作为 HMAC key，password 作为被签名数据，输出 32 字节十六进制。
+export async function hashPassword(password, salt /* iterations 参数忽略，保持兼容 */) {
   const enc = new TextEncoder();
-  const passwordBuf = toArrayBuffer(enc.encode(password));
   const saltBuf = toArrayBuffer(enc.encode(salt));
-  const keyMaterial = await crypto.subtle.importKey(
+  const passwordBuf = toArrayBuffer(enc.encode(password));
+  const key = await crypto.subtle.importKey(
     'raw',
-    passwordBuf,
-    { name: 'PBKDF2' },
+    saltBuf,
+    { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ['deriveBits']
+    ['sign']
   );
-  const derived = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: saltBuf, iterations, hash: 'SHA-256' },
-    keyMaterial,
-    256
-  );
-  return buf2hex(derived);
+  const sig = await crypto.subtle.sign('HMAC', key, passwordBuf);
+  return buf2hex(sig);
 }
 
 // ---------- 用户与记忆存储 ----------
@@ -485,12 +486,12 @@ export async function runDiagnostics(env) {
     steps.push({ step: 'KV.get(不存在key)', ok: false, error: String(e && e.message ? e.message : e) });
   }
 
-  // 3) hashPassword（crypto.subtle PBKDF2）
+  // 3) hashPassword（HMAC-SHA256：importKey + sign，均已支持）
   try {
     const h = await hashPassword('diag_password', 'diag_salt');
-    steps.push({ step: 'hashPassword(PBKDF2)', ok: true, hashLen: h ? h.length : 0 });
+    steps.push({ step: 'hashPassword(HMAC-SHA256)', ok: true, hashLen: h ? h.length : 0 });
   } catch (e) {
-    steps.push({ step: 'hashPassword(PBKDF2)', ok: false, error: String(e && e.message ? e.message : e), name: e && e.name });
+    steps.push({ step: 'hashPassword(HMAC-SHA256)', ok: false, error: String(e && e.message ? e.message : e), name: e && e.name });
   }
 
   // 4) sha256（crypto.subtle digest，API Key 依赖）

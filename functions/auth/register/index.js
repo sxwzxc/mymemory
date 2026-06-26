@@ -61,7 +61,6 @@ export async function onRequest({ request, env }) {
       username: uname,
       passwordHash,
       salt,
-      iterations: 100000,
       createdAt: new Date().toISOString(),
       apiKeys: [],
     };
