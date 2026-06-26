@@ -2,6 +2,7 @@ import {
   jsonResponse,
   corsHeaders,
   handleOptions,
+  initKv,
   getSessionUser,
   readUser,
   createApiKey,
@@ -12,6 +13,7 @@ export async function onRequest({ request, env }) {
   const options = handleOptions(request);
   if (options) return options;
   try {
+    initKv(env);
     const username = await getSessionUser(request);
     if (!username) {
       return jsonResponse({ error: '未登录' }, 401, corsHeaders(request));

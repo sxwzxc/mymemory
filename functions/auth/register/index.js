@@ -2,6 +2,7 @@ import {
   jsonResponse,
   corsHeaders,
   handleOptions,
+  initKv,
   isRegisterAllowed,
   normalizeUsername,
   randomToken,
@@ -16,6 +17,7 @@ export async function onRequest({ request, env }) {
   const options = handleOptions(request);
   if (options) return options;
   try {
+    initKv(env);
     if (!isRegisterAllowed(env)) {
       return jsonResponse(
         { error: '管理员已关闭注册功能' },

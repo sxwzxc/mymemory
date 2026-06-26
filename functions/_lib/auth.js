@@ -9,6 +9,64 @@ const SESSION_COOKIE = 'mm_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 天
 const PBKDF2_ITERATIONS = 100000;
 
+// ---------- KV 绑定解析 ----------
+// EdgeOne Pages 把绑定的 KV 命名空间以「变量名」注入为全局变量
+// （见 https://pages.edgeone.ai/zh/document/kv-storage ，示例用 my_kv）。
+// 为避免「mymemory is not defined」（变量名不一致或未绑定），这里动态解析：
+//   1) 优先使用全局变量 mymemory（与原仓库模板一致）
+//   2) 退回 env.mymemory / env.MYMEMORY（部分运行时把绑定挂在 env 上）
+//   3) 兜底：扫描 env 中任意具备 get/put/delete 的 KV-like 对象
+// 解析失败时抛出明确错误，便于在控制台日志中定位。
+let _kv = null;
+
+function looksLikeKv(v) {
+  return (
+    v &&
+    typeof v === 'object' &&
+    typeof v.get === 'function' &&
+    typeof v.put === 'function' &&
+    typeof v.delete === 'function'
+  );
+}
+
+function resolveKv(env) {
+  // 1) 全局变量：通过 globalThis 按名读取，避免直接引用未声明变量抛 ReferenceError
+  //    （不使用 eval，规避部分边缘运行时对 eval 的 CSP 限制）
+  const globalNames = ['mymemory', 'my_memory', 'kv', 'my_kv', 'KV'];
+  for (const name of globalNames) {
+    const g = globalThis[name];
+    if (looksLikeKv(g)) return g;
+  }
+  // 2) env 上的绑定
+  if (env) {
+    for (const name of globalNames) {
+      if (looksLikeKv(env[name])) return env[name];
+    }
+    // 3) 兜底：扫描 env 上任意 KV-like 对象
+    for (const k of Object.keys(env)) {
+      if (looksLikeKv(env[k])) return env[k];
+    }
+  }
+  return null;
+}
+
+// 每个 onRequest 入口需先调用 initKv(env) 解析绑定
+export function initKv(env) {
+  if (_kv) return _kv;
+  _kv = resolveKv(env);
+  return _kv;
+}
+
+// 内部统一访问器
+function kv() {
+  if (!_kv) {
+    throw new Error(
+      'KV 存储未绑定：请在 EdgeOne Pages 项目「KV 存储」中绑定命名空间，变量名设为 mymemory。'
+    );
+  }
+  return _kv;
+}
+
 // ---------- 通用工具 ----------
 
 export function buf2hex(buf) {
@@ -93,7 +151,7 @@ export function normalizeUsername(name) {
 }
 
 export async function readUser(username) {
-  const raw = await mymemory.get(userKey(username));
+  const raw = await kv().get(userKey(username));
   if (raw === null || raw === undefined) return null;
   try {
     return JSON.parse(raw);
@@ -103,11 +161,11 @@ export async function readUser(username) {
 }
 
 export async function writeUser(user) {
-  await mymemory.put(userKey(user.username), JSON.stringify(user));
+  await kv().put(userKey(user.username), JSON.stringify(user));
 }
 
 export async function readUserMemories(username) {
-  const raw = await mymemory.get(memoriesKey(username));
+  const raw = await kv().get(memoriesKey(username));
   if (raw === null || raw === undefined) return [];
   try {
     const arr = JSON.parse(raw);
@@ -118,7 +176,7 @@ export async function readUserMemories(username) {
 }
 
 export async function writeUserMemories(username, items) {
-  await mymemory.put(memoriesKey(username), JSON.stringify(items));
+  await kv().put(memoriesKey(username), JSON.stringify(items));
 }
 
 // ---------- 会话（cookie） ----------
@@ -140,7 +198,7 @@ export async function getSessionUser(request) {
   const cookies = parseCookies(request);
   const token = cookies[SESSION_COOKIE];
   if (!token) return null;
-  const raw = await mymemory.get(`session:${token}`);
+  const raw = await kv().get(`session:${token}`);
   if (raw === null || raw === undefined) return null;
   try {
     const data = JSON.parse(raw);
@@ -148,7 +206,7 @@ export async function getSessionUser(request) {
     // 内嵌过期检查（兼容不同 KV 是否原生支持 TTL）
     const expiresAt = data.expiresAt ? Date.parse(data.expiresAt) : Infinity;
     if (Date.now() > expiresAt) {
-      await mymemory.delete(`session:${token}`);
+      await kv().delete(`session:${token}`);
       return null;
     }
     return data.username;
@@ -160,7 +218,7 @@ export async function getSessionUser(request) {
 export async function createSession(username) {
   const token = randomToken(32);
   const now = Date.now();
-  await mymemory.put(
+  await kv().put(
     `session:${token}`,
     JSON.stringify({
       username,
@@ -175,7 +233,7 @@ export async function destroySession(request) {
   const cookies = parseCookies(request);
   const token = cookies[SESSION_COOKIE];
   if (token) {
-    await mymemory.delete(`session:${token}`);
+    await kv().delete(`session:${token}`);
   }
 }
 
@@ -236,7 +294,7 @@ export async function createApiKey(user, name) {
   user.apiKeys = user.apiKeys || [];
   user.apiKeys.push(keyRecord);
   await writeUser(user);
-  await mymemory.put(
+  await kv().put(
     `apikey:${hash}`,
     JSON.stringify({ username: user.username, keyId })
   );
@@ -250,7 +308,7 @@ export async function deleteApiKey(user, keyId) {
   const hash = user.apiKeys[idx].hash;
   user.apiKeys.splice(idx, 1);
   await writeUser(user);
-  await mymemory.delete(`apikey:${hash}`);
+  await kv().delete(`apikey:${hash}`);
   return true;
 }
 
@@ -260,7 +318,7 @@ export async function authenticateApiKey(request) {
   if (!m) return null;
   const secret = m[1].trim();
   const hash = await sha256Hex(secret);
-  const raw = await mymemory.get(`apikey:${hash}`);
+  const raw = await kv().get(`apikey:${hash}`);
   if (raw === null || raw === undefined) return null;
   try {
     const data = JSON.parse(raw);

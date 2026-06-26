@@ -2,6 +2,7 @@ import {
   jsonResponse,
   corsHeaders,
   handleOptions,
+  initKv,
   authenticateApiKey,
   readUserMemories,
   writeUserMemories,
@@ -13,6 +14,7 @@ export async function onRequest({ request, env }) {
   const options = handleOptions(request);
   if (options) return options;
   try {
+    initKv(env);
     const username = await authenticateApiKey(request);
     if (!username) {
       return jsonResponse({ error: '无效或缺失的 API Key' }, 401, corsHeaders(request));

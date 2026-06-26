@@ -2,6 +2,7 @@ import {
   jsonResponse,
   corsHeaders,
   handleOptions,
+  initKv,
   getSessionUser,
   isRegisterAllowed,
 } from '../../_lib/auth.js';
@@ -10,6 +11,7 @@ export async function onRequest({ request, env }) {
   const options = handleOptions(request);
   if (options) return options;
   try {
+    initKv(env);
     const username = await getSessionUser(request);
     return jsonResponse(
       {

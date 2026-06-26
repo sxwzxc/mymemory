@@ -2,6 +2,7 @@ import {
   jsonResponse,
   corsHeaders,
   handleOptions,
+  initKv,
   normalizeUsername,
   hashPassword,
   readUser,
@@ -13,6 +14,7 @@ export async function onRequest({ request, env }) {
   const options = handleOptions(request);
   if (options) return options;
   try {
+    initKv(env);
     const body = await request.json();
     const { username, password } = body || {};
     const uname = normalizeUsername(username);

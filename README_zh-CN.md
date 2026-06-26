@@ -11,9 +11,12 @@
 
 [![使用 EdgeOne Pages 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/pages/new?from=github&template=functions-kv)
 
-### 1. 准备 KV 命名空间
+### 1. 准备并绑定 KV 命名空间
 
-在 EdgeOne 控制台「KV 存储」中创建一个命名空间，名称填 `mymemory`（与代码中的全局绑定一致）。Pages 项目创建时会自动把该命名空间以同名全局变量的形式注入到边缘函数运行时中。
+1. 在 EdgeOne 控制台「存储 → KV」中创建一个命名空间（名称可任取，如 `mymemory`）。
+2. 进入 Pages 项目详情 → 「KV 存储」菜单，点击「绑定命名空间」，**变量名必须填 `mymemory`**（这是边缘函数中访问该 KV 的全局变量名）。
+
+> 代码已做容错：若变量名不一致，会自动从 `env` 上寻找任意 KV 绑定；但未绑定任何命名空间时会报错 `KV 存储未绑定`。详见官方文档 [KV 存储](https://pages.edgeone.ai/zh/document/kv-storage)。
 
 ### 2. 创建 Pages 项目并关联仓库
 
