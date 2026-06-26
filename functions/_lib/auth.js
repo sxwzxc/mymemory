@@ -85,12 +85,35 @@ function kv() {
   }
   return {
     async get(key, opts) {
+      if (typeof key !== 'string' || key.length === 0) {
+        console.error('[mymemory] KV.get 非法 key:', typeof key, JSON.stringify(key));
+        throw new Error('KV.get 非法 key');
+      }
       console.log('[mymemory] KV.get:', key);
-      const v = await _kv.get(key, opts);
-      console.log('[mymemory] KV.get 结果:', key, '=>', v === null || v === undefined ? '(null)' : `(len=${typeof v === 'string' ? v.length : '?'})`);
+      // 仅在 opts 确实提供时才转发第二参数。
+      // EdgeOne KV 运行时对 get 的第二参数（type）做严格校验，
+      // 即使语义上是可选，显式传入 undefined 也会报
+      // "Argument 1 type invalid. expect: 'String | Object' get: 'undefined'"。
+      // 官方示例 await my_kv.get(key) 只传一个参数能正常工作，因此这里保持一致。
+      const v =
+        opts === undefined ? await _kv.get(key) : await _kv.get(key, opts);
+      console.log(
+        '[mymemory] KV.get 结果:',
+        key,
+        '=>',
+        v === null || v === undefined ? '(null)' : `(len=${typeof v === 'string' ? v.length : '?'})`
+      );
       return v;
     },
     async put(key, value) {
+      if (typeof key !== 'string' || key.length === 0) {
+        console.error('[mymemory] KV.put 非法 key:', typeof key, JSON.stringify(key));
+        throw new Error('KV.put 非法 key');
+      }
+      if (typeof value !== 'string' && !(value instanceof ArrayBuffer) && !(ArrayBuffer.isView(value))) {
+        console.error('[mymemory] KV.put 非法 value 类型:', typeof value);
+        throw new Error('KV.put 非法 value 类型');
+      }
       console.log('[mymemory] KV.put:', key, '(len=', typeof value === 'string' ? value.length : '?', ')');
       try {
         const r = await _kv.put(key, value);
@@ -102,6 +125,10 @@ function kv() {
       }
     },
     async delete(key) {
+      if (typeof key !== 'string' || key.length === 0) {
+        console.error('[mymemory] KV.delete 非法 key:', typeof key, JSON.stringify(key));
+        throw new Error('KV.delete 非法 key');
+      }
       console.log('[mymemory] KV.delete:', key);
       try {
         const r = await _kv.delete(key);
