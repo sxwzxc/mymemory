@@ -2,20 +2,20 @@ import {
   jsonResponse,
   corsHeaders,
   handleOptions,
-  getSessionUser,
+  authenticateApiKey,
   readUserMemories,
   writeUserMemories,
-} from '../../_lib/auth.js';
+} from '../../../_lib/auth.js';
 
-// POST /memories/set —— 新增/更新当前登录用户的记忆
+// POST /api/memories/set —— 使用 API Key 新增/更新记忆
 // Body: { key, value, meta }
 export async function onRequest({ request, env }) {
   const options = handleOptions(request);
   if (options) return options;
   try {
-    const username = await getSessionUser(request);
+    const username = await authenticateApiKey(request);
     if (!username) {
-      return jsonResponse({ error: '未登录' }, 401, corsHeaders(request));
+      return jsonResponse({ error: '无效或缺失的 API Key' }, 401, corsHeaders(request));
     }
     const body = await request.json();
     const { key, value, meta } = body || {};
@@ -28,7 +28,7 @@ export async function onRequest({ request, env }) {
     const now = new Date().toISOString();
     const enrichedMeta = {
       ...(meta || {}),
-      createdAt: idx >= 0 ? items[idx].meta?.createdAt : meta?.createdAt || now,
+      createdAt: idx >= 0 ? items[idx].meta?.createdAt : now,
       updatedAt: now,
     };
     const entry = { key, value: String(value), meta: enrichedMeta };
@@ -36,7 +36,7 @@ export async function onRequest({ request, env }) {
     else items.push(entry);
     await writeUserMemories(username, items);
 
-    return jsonResponse({ message: '记忆已保存' }, 200, corsHeaders(request));
+    return jsonResponse({ message: '记忆已保存', key }, 200, corsHeaders(request));
   } catch (err) {
     return jsonResponse(
       { error: err.message || String(err) },

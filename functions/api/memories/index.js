@@ -2,18 +2,19 @@ import {
   jsonResponse,
   corsHeaders,
   handleOptions,
-  getSessionUser,
+  authenticateApiKey,
   readUserMemories,
-} from '../_lib/auth.js';
+} from '../../_lib/auth.js';
 
-// GET /memories —— 列出当前登录用户的全部记忆
+// GET /api/memories  —— 使用 API Key 列出当前用户全部记忆
+// 需要 Header: Authorization: Bearer <api_key>
 export async function onRequest({ request, env }) {
   const options = handleOptions(request);
   if (options) return options;
   try {
-    const username = await getSessionUser(request);
+    const username = await authenticateApiKey(request);
     if (!username) {
-      return jsonResponse({ error: '未登录' }, 401, corsHeaders(request));
+      return jsonResponse({ error: '无效或缺失的 API Key' }, 401, corsHeaders(request));
     }
     const items = await readUserMemories(username);
     // 按创建时间倒序

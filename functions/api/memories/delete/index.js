@@ -2,19 +2,19 @@ import {
   jsonResponse,
   corsHeaders,
   handleOptions,
-  getSessionUser,
+  authenticateApiKey,
   readUserMemories,
   writeUserMemories,
-} from '../../_lib/auth.js';
+} from '../../../_lib/auth.js';
 
-// DELETE /memories/delete?key=xxx —— 删除当前登录用户的记忆
+// DELETE /api/memories/delete?key=xxx —— 使用 API Key 删除记忆
 export async function onRequest({ request, env }) {
   const options = handleOptions(request);
   if (options) return options;
   try {
-    const username = await getSessionUser(request);
+    const username = await authenticateApiKey(request);
     if (!username) {
-      return jsonResponse({ error: '未登录' }, 401, corsHeaders(request));
+      return jsonResponse({ error: '无效或缺失的 API Key' }, 401, corsHeaders(request));
     }
     const url = new URL(request.url);
     const key = url.searchParams.get('key');

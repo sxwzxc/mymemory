@@ -9,6 +9,12 @@ import {
   Memory,
 } from '@/lib/api';
 
+interface MemoryPanelProps {
+  username?: string | null;
+  onLogout?: () => void;
+  onShowApiKeys?: () => void;
+}
+
 type ItemType = 'memory' | 'skill';
 type FilterType = 'all' | ItemType;
 
@@ -27,7 +33,11 @@ const EMPTY_FORM: FormData = {
   type: 'memory',
 };
 
-export default function MemoryPanel() {
+export default function MemoryPanel({
+  username,
+  onLogout,
+  onShowApiKeys,
+}: MemoryPanelProps = {}) {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -215,15 +225,36 @@ export default function MemoryPanel() {
                 </h1>
                 <p className="text-slate-500 text-xs mt-0.5">
                   {memoryCount} 条记忆 · {skillCount} 个 Skill
+                  {username ? ` · @${username}` : ''}
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => openCreateForm('memory')}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/25 text-sm"
-            >
-              <span className="text-base leading-none">+</span> 新增
-            </button>
+            <div className="flex items-center gap-2">
+              {onShowApiKeys && (
+                <button
+                  onClick={onShowApiKeys}
+                  className="px-3 py-2.5 bg-slate-800/60 text-slate-300 rounded-xl font-medium hover:bg-slate-700/60 transition text-sm border border-slate-700/40"
+                  title="API Keys"
+                >
+                  🔑 API Keys
+                </button>
+              )}
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="px-3 py-2.5 bg-slate-800/60 text-slate-400 rounded-xl font-medium hover:bg-red-500/15 hover:text-red-300 transition text-sm border border-slate-700/40"
+                  title="退出登录"
+                >
+                  退出
+                </button>
+              )}
+              <button
+                onClick={() => openCreateForm('memory')}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/25 text-sm"
+              >
+                <span className="text-base leading-none">+</span> 新增
+              </button>
+            </div>
           </div>
 
           {/* 搜索栏 */}
