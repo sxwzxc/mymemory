@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "EdgeOne Pages Functions: KV Store",
-  description: "An example of using EdgeOne Pages Functions with KV Store.",
+  title: "🧠 AI 记忆库 | MyMemory",
+  description: "我的个人 AI 记忆库，使用 EdgeOne Pages KV 存储记忆和技能。",
 };
 
 export default function RootLayout({

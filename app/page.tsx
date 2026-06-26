@@ -1,9 +1,9 @@
-import Kv from '@/components/Kv';
+import MemoryPanel from '@/components/Kv';
 
 export default function Home() {
   return (
     <main>
-      <Kv />
+      <MemoryPanel />
     </main>
   );
 }
