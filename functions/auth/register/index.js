@@ -11,6 +11,7 @@ import {
   writeUser,
   writeUserMemories,
   buildSampleMemory,
+  toErrorBody,
 } from '../../_lib/auth.js';
 
 export async function onRequest({ request, env }) {
@@ -31,7 +32,7 @@ export async function onRequest({ request, env }) {
     const uname = normalizeUsername(username);
     if (!uname) {
       return jsonResponse(
-        { error: '用户名仅允许字母、数字、下划线、短横线、点，长度 3-32' },
+        { error: '用户名仅允许字母、数字、下划线，长度 3-32' },
         400,
         corsHeaders(request)
       );
@@ -76,8 +77,9 @@ export async function onRequest({ request, env }) {
       corsHeaders(request)
     );
   } catch (err) {
+    console.error('[mymemory] register 异常:', err);
     return jsonResponse(
-      { error: err.message || String(err) },
+      toErrorBody(err),
       500,
       corsHeaders(request)
     );

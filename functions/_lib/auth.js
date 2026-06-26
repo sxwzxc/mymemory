@@ -430,3 +430,71 @@ export function buildSampleMemory() {
     },
   };
 }
+
+// ---------- 错误体与诊断 ----------
+
+// 把任意 thrown 值规范化为可返回前端的错误体，确保不再吞掉真实信息
+export function toErrorBody(err) {
+  const name = err && err.name ? err.name : 'Error';
+  const message = err && err.message ? err.message : String(err);
+  const stack = err && err.stack ? String(err.stack).split('\n').slice(0, 3).join(' | ') : undefined;
+  const body = { error: `${name}: ${message}` };
+  if (stack) body.stack = stack;
+  return body;
+}
+
+// 诊断：逐步执行 KV 绑定 / get / put / delete / hashPassword，返回每步结果。
+// 用于在 /auth/diag 端点直接暴露哪一步失败、什么错误，无需看日志。
+export async function runDiagnostics(env) {
+  const steps = [];
+  const report = { kvSource: _kvSource, envKeys: env ? Object.keys(env) : null, steps };
+
+  // 1) KV 绑定解析
+  try {
+    const ok = initKv(env);
+    steps.push({ step: 'initKv', ok: !!ok, source: _kvSource });
+    if (!ok) {
+      steps.push({ step: 'skip(无KV绑定)', ok: false });
+      return report;
+    }
+  } catch (e) {
+    steps.push({ step: 'initKv', ok: false, error: String(e) });
+    return report;
+  }
+
+  // 2) KV.get 不存在的 key（应返回 null，不报错）
+  try {
+    const v = await kv().get('diag_notexist');
+    steps.push({ step: 'KV.get(不存在key)', ok: true, result: v === null ? 'null(符合预期)' : '非null' });
+  } catch (e) {
+    steps.push({ step: 'KV.get(不存在key)', ok: false, error: String(e && e.message ? e.message : e) });
+  }
+
+  // 3) hashPassword（crypto.subtle PBKDF2）
+  try {
+    const h = await hashPassword('diag_password', 'diag_salt');
+    steps.push({ step: 'hashPassword(PBKDF2)', ok: true, hashLen: h ? h.length : 0 });
+  } catch (e) {
+    steps.push({ step: 'hashPassword(PBKDF2)', ok: false, error: String(e && e.message ? e.message : e), name: e && e.name });
+  }
+
+  // 4) sha256（crypto.subtle digest，API Key 依赖）
+  try {
+    const h = await sha256Hex('diag_text');
+    steps.push({ step: 'sha256Hex', ok: true, hashLen: h ? h.length : 0 });
+  } catch (e) {
+    steps.push({ step: 'sha256Hex', ok: false, error: String(e && e.message ? e.message : e), name: e && e.name });
+  }
+
+  // 5) KV.put + delete（写一个测试 key 再删）
+  try {
+    await kv().put('diag_test', 'hello');
+    steps.push({ step: 'KV.put', ok: true });
+    await kv().delete('diag_test');
+    steps.push({ step: 'KV.delete', ok: true });
+  } catch (e) {
+    steps.push({ step: 'KV.put/delete', ok: false, error: String(e && e.message ? e.message : e) });
+  }
+
+  return report;
+}

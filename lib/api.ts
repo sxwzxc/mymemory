@@ -43,7 +43,9 @@ export interface MeResponse {
 async function parseError(res: Response): Promise<string> {
   try {
     const data = await res.json();
-    return data.error || `请求失败 (${res.status})`;
+    if (data.error) return data.error;
+    if (data.stack) return data.stack;
+    return `请求失败 (${res.status})`;
   } catch {
     return `请求失败 (${res.status})`;
   }

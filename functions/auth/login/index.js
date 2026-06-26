@@ -8,6 +8,7 @@ import {
   readUser,
   createSession,
   sessionCookieHeader,
+  toErrorBody,
 } from '../../_lib/auth.js';
 
 export async function onRequest({ request, env }) {
@@ -52,8 +53,9 @@ export async function onRequest({ request, env }) {
       { ...corsHeaders(request), ...sessionCookieHeader(token, request) }
     );
   } catch (err) {
+    console.error('[mymemory] login 异常:', err);
     return jsonResponse(
-      { error: err.message || String(err) },
+      toErrorBody(err),
       500,
       corsHeaders(request)
     );
