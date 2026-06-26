@@ -63,7 +63,7 @@ npx edgeone pages dev --port 8088
 
 | Key | Value（JSON） | 作用 |
 | --- | --- | --- |
-| `user_<username>` | `{ username, passwordHash, salt, iterations, createdAt, apiKeys[] }` | 账户信息。密码使用 PBKDF2-SHA256（10w 次迭代 + 16 字节 salt）加盐哈希 |
+| `user_<username>` | `{ username, passwordHash, salt, createdAt, apiKeys[] }` | 账户信息。密码使用 HMAC-SHA256 加 per-user salt 哈希（注：EdgeOne 运行时 WebCrypto 暂不支持 PBKDF2 的 deriveBits，故改用 HMAC） |
 | `memories_<username>` | `[{ key, value, meta }]` | 该用户**全部**记忆，整体作为一个 KV value 存储 |
 | `session_<token>` | `{ username, createdAt, expiresAt }` | 会话。token 经 HttpOnly Cookie 下发，过期时间同时写入 value（不依赖 KV 原生 TTL，跨平台兼容） |
 | `apikey_<sha256>` | `{ username, keyId }` | API Key → 用户名的反向索引，O(1) 鉴权。明文密钥不存储，只存哈希 |
@@ -112,7 +112,7 @@ curl -X DELETE https://your-app.edgeone.app/api/memories/delete?key=memory_001 \
 
 ## 安全说明
 
-- 密码：PBKDF2-SHA256，10w 次迭代 + 用户级 salt
+- 密码：HMAC-SHA256 + 用户级 salt（EdgeOne 运行时 WebCrypto 暂不支持 PBKDF2 的 deriveBits）
 - 会话：随机 32 字节 token，HttpOnly + SameSite=Lax，HTTPS 下追加 Secure；过期时间嵌入 value，不依赖 KV 原生 TTL
 - API Key：明文不落库，只存 SHA-256；展示一次后无法找回
 - 用户隔离：每条记忆读写都强校验当前会话/Key 所属用户，KV 中按用户名分桶
