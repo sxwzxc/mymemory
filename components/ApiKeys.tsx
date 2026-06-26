@@ -10,9 +10,10 @@ import {
 
 interface ApiKeysProps {
   apiHost: string;
+  onBack?: () => void;
 }
 
-export default function ApiKeys({ apiHost }: ApiKeysProps) {
+export default function ApiKeys({ apiHost, onBack }: ApiKeysProps) {
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +96,32 @@ export default function ApiKeys({ apiHost }: ApiKeysProps) {
   };
 
   return (
-    <div className="relative max-w-4xl mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/30 to-slate-950">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 -left-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl" />
+      </div>
+
+      <header className="sticky top-0 z-20 backdrop-blur-2xl bg-slate-950/60 border-b border-slate-800/60">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={onBack}
+              className="px-3 py-2 bg-slate-800/60 text-slate-300 rounded-xl font-medium hover:bg-slate-700/60 transition text-sm border border-slate-700/40 whitespace-nowrap"
+            >
+              ← 返回
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent truncate">
+                API Keys
+              </h1>
+              <p className="text-slate-500 text-xs">用程序化方式读写你的记忆库</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="relative max-w-4xl mx-auto px-4 py-6">
       {/* 创建表单 */}
       <div className="mb-6 bg-slate-900/70 backdrop-blur-xl border border-slate-800 rounded-2xl p-6">
         <h2 className="text-lg font-semibold text-slate-200 mb-1">创建新的 API Key</h2>
@@ -209,6 +235,11 @@ export default function ApiKeys({ apiHost }: ApiKeysProps) {
             ))}
           </ul>
         )}
+      </div>
+
+      <footer className="text-center py-10 text-slate-700 text-xs">
+        <p>API Key 采用 SHA-256 哈希存储 · 仅创建时明文显示一次</p>
+      </footer>
       </div>
     </div>
   );

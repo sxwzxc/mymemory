@@ -67,7 +67,7 @@ export default function Home() {
   return (
     <>
       {view === 'apikeys' ? (
-        <ApiKeys apiHost={API_HOST} />
+        <ApiKeys apiHost={API_HOST} onBack={() => setView('memories')} />
       ) : view === 'guide' ? (
         <Guide apiHost={API_HOST} onBack={() => setView('memories')} />
       ) : (
@@ -77,16 +77,6 @@ export default function Home() {
           onShowApiKeys={() => setView('apikeys')}
           onShowGuide={() => setView('guide')}
         />
-      )}
-      {view !== 'memories' && view !== 'guide' && (
-        <div className="max-w-4xl mx-auto px-4 pb-10 -mt-2">
-          <button
-            onClick={() => setView('memories')}
-            className="text-sm text-purple-400 hover:text-purple-300 transition"
-          >
-            ← 返回记忆库
-          </button>
-        </div>
       )}
     </>
   );
