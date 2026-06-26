@@ -146,7 +146,21 @@ export default function Auth({ allowRegister, onAuthenticated }: AuthProps) {
           </form>
         </div>
 
-        <p className="text-center mt-6 text-xs text-slate-700">
+        <div className="mt-7 grid grid-cols-3 gap-2">
+          <div className="text-center px-2 py-3 rounded-xl bg-slate-900/40 border border-slate-800/60">
+            <div className="text-xl mb-1">📝</div>
+            <div className="text-xs text-slate-400">记忆库</div>
+          </div>
+          <div className="text-center px-2 py-3 rounded-xl bg-slate-900/40 border border-slate-800/60">
+            <div className="text-xl mb-1">⚡</div>
+            <div className="text-xs text-slate-400">AI Skill</div>
+          </div>
+          <div className="text-center px-2 py-3 rounded-xl bg-slate-900/40 border border-slate-800/60">
+            <div className="text-xl mb-1">🔌</div>
+            <div className="text-xs text-slate-400">API 接口</div>
+          </div>
+        </div>
+        <p className="text-center mt-4 text-xs text-slate-700">
           记忆数据存储在 EdgeOne Pages KV · 每个用户独立隔离
         </p>
       </div>

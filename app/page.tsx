@@ -4,10 +4,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import MemoryPanel from '@/components/Kv';
 import Auth from '@/components/Auth';
 import ApiKeys from '@/components/ApiKeys';
+import Guide from '@/components/Guide';
 import { getAuthStatus, logout, API_HOST } from '@/lib/api';
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated';
-type View = 'memories' | 'apikeys';
+type View = 'memories' | 'apikeys' | 'guide';
 
 export default function Home() {
   const [authState, setAuthState] = useState<AuthState>('loading');
@@ -67,14 +68,17 @@ export default function Home() {
     <>
       {view === 'apikeys' ? (
         <ApiKeys apiHost={API_HOST} />
+      ) : view === 'guide' ? (
+        <Guide apiHost={API_HOST} onBack={() => setView('memories')} />
       ) : (
         <MemoryPanel
           username={username}
           onLogout={handleLogout}
           onShowApiKeys={() => setView('apikeys')}
+          onShowGuide={() => setView('guide')}
         />
       )}
-      {view === 'apikeys' && (
+      {view !== 'memories' && view !== 'guide' && (
         <div className="max-w-4xl mx-auto px-4 pb-10 -mt-2">
           <button
             onClick={() => setView('memories')}

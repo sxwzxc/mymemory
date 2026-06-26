@@ -6,6 +6,10 @@ import {
   addMemory,
   updateMemory,
   deleteMemory,
+  formatSkillAsPrompt,
+  SKILL_TEMPLATES,
+  SKILL_CATEGORY_LABELS,
+  SkillCategory,
   Memory,
 } from '@/lib/api';
 
@@ -13,6 +17,7 @@ interface MemoryPanelProps {
   username?: string | null;
   onLogout?: () => void;
   onShowApiKeys?: () => void;
+  onShowGuide?: () => void;
 }
 
 type ItemType = 'memory' | 'skill';
@@ -23,6 +28,9 @@ interface FormData {
   content: string;
   tags: string;
   type: ItemType;
+  usage: string;
+  examples: string;
+  category: SkillCategory | '';
   createdAt?: string;
 }
 
@@ -31,12 +39,26 @@ const EMPTY_FORM: FormData = {
   content: '',
   tags: '',
   type: 'memory',
+  usage: '',
+  examples: '',
+  category: '',
 };
+
+const CATEGORY_OPTIONS: SkillCategory[] = [
+  'translate',
+  'summary',
+  'writing',
+  'code',
+  'roleplay',
+  'analysis',
+  'other',
+];
 
 export default function MemoryPanel({
   username,
   onLogout,
   onShowApiKeys,
+  onShowGuide,
 }: MemoryPanelProps = {}) {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,6 +76,8 @@ export default function MemoryPanel({
 
   // 删除确认
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  // 复制提示词反馈
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const fetchMemories = useCallback(async () => {
     try {
@@ -78,6 +102,21 @@ export default function MemoryPanel({
     setShowForm(true);
   };
 
+  const applyTemplate = (idx: number) => {
+    const t = SKILL_TEMPLATES[idx];
+    if (!t) return;
+    setForm({
+      ...EMPTY_FORM,
+      type: 'skill',
+      title: t.title,
+      content: t.content,
+      usage: t.usage,
+      examples: t.examples.join('\n'),
+      category: t.category,
+      tags: t.category,
+    });
+  };
+
   const openEditForm = (mem: Memory) => {
     setEditingKey(mem.key);
     setForm({
@@ -85,6 +124,9 @@ export default function MemoryPanel({
       content: mem.value,
       tags: (mem.meta?.tags || []).join(', '),
       type: mem.meta?.type || 'memory',
+      usage: mem.meta?.usage || '',
+      examples: (mem.meta?.examples || []).join('\n'),
+      category: mem.meta?.category || '',
       createdAt: mem.meta?.createdAt,
     });
     setShowForm(true);
@@ -106,6 +148,12 @@ export default function MemoryPanel({
       .map((t) => t.trim())
       .filter(Boolean);
 
+    const isSkill = form.type === 'skill';
+    const examples = form.examples
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     try {
       setIsSaving(true);
       if (editingKey) {
@@ -113,6 +161,9 @@ export default function MemoryPanel({
           title: form.title.trim(),
           tags,
           type: form.type,
+          usage: isSkill ? form.usage.trim() || undefined : undefined,
+          examples: isSkill && examples.length ? examples : undefined,
+          category: isSkill && form.category ? (form.category as SkillCategory) : undefined,
           createdAt: form.createdAt,
         });
       } else {
@@ -123,6 +174,9 @@ export default function MemoryPanel({
           title: form.title.trim(),
           tags,
           type: form.type,
+          usage: isSkill ? form.usage.trim() || undefined : undefined,
+          examples: isSkill && examples.length ? examples : undefined,
+          category: isSkill && form.category ? (form.category as SkillCategory) : undefined,
         });
       }
       closeForm();
@@ -146,6 +200,17 @@ export default function MemoryPanel({
     }
   };
 
+  const handleCopyPrompt = async (mem: Memory) => {
+    try {
+      const text = formatSkillAsPrompt(mem);
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(mem.key);
+      setTimeout(() => setCopiedKey(null), 1800);
+    } catch {
+      // 忽略剪贴板权限错误
+    }
+  };
+
   // 搜索 + 筛选
   const filteredMemories = useMemo(() => {
     let result = memories;
@@ -158,7 +223,8 @@ export default function MemoryPanel({
         (m) =>
           (m.meta?.title || '').toLowerCase().includes(q) ||
           m.value.toLowerCase().includes(q) ||
-          (m.meta?.tags || []).some((t) => t.toLowerCase().includes(q))
+          (m.meta?.tags || []).some((t) => t.toLowerCase().includes(q)) ||
+          (m.meta?.usage || '').toLowerCase().includes(q)
       );
     }
     return result;
@@ -190,7 +256,7 @@ export default function MemoryPanel({
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/40 to-slate-950 flex items-center justify-center p-4">
         <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-8 max-w-md text-center backdrop-blur-xl">
           <div className="text-4xl mb-4">⚠️</div>
-          <p className="text-red-300 mb-6">{error}</p>
+          <p className="text-red-300 mb-6 leading-relaxed">{error}</p>
           <button
             onClick={fetchMemories}
             className="px-5 py-2.5 bg-red-500/20 text-red-200 rounded-xl hover:bg-red-500/30 transition font-medium"
@@ -230,6 +296,15 @@ export default function MemoryPanel({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {onShowGuide && (
+                <button
+                  onClick={onShowGuide}
+                  className="px-3 py-2.5 bg-slate-800/60 text-slate-300 rounded-xl font-medium hover:bg-slate-700/60 transition text-sm border border-slate-700/40"
+                  title="使用说明"
+                >
+                  📖 说明
+                </button>
+              )}
               {onShowApiKeys && (
                 <button
                   onClick={onShowApiKeys}
@@ -267,7 +342,7 @@ export default function MemoryPanel({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜索标题、内容或标签..."
+                placeholder="搜索标题、内容、标签或使用场景..."
                 className="w-full pl-9 pr-4 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition"
               />
             </div>
@@ -331,7 +406,9 @@ export default function MemoryPanel({
                       onClick={() => setForm({ ...form, type: opt.key })}
                       className={`flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all border ${
                         form.type === opt.key
-                          ? 'bg-purple-500/15 text-purple-300 border-purple-500/40'
+                          ? opt.key === 'skill'
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                            : 'bg-purple-500/15 text-purple-300 border-purple-500/40'
                           : 'bg-slate-900/40 text-slate-500 border-slate-800 hover:text-slate-400'
                       }`}
                     >
@@ -340,6 +417,30 @@ export default function MemoryPanel({
                   ))}
                 </div>
               </div>
+
+              {/* Skill 模板快建 */}
+              {form.type === 'skill' && !editingKey && (
+                <div className="mb-4 bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm text-amber-300/90 font-medium">
+                      🚀 一键套用模板
+                    </label>
+                    <span className="text-xs text-slate-500">点击后自动填充</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {SKILL_TEMPLATES.map((t, i) => (
+                      <button
+                        key={t.name}
+                        type="button"
+                        onClick={() => applyTemplate(i)}
+                        className="px-3 py-1.5 text-xs rounded-lg bg-slate-900/60 border border-slate-700/60 text-slate-300 hover:bg-amber-500/15 hover:text-amber-200 hover:border-amber-500/40 transition"
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="mb-4">
                 <label className="block text-sm text-slate-400 mb-1.5">标题</label>
@@ -356,6 +457,59 @@ export default function MemoryPanel({
                   className="w-full px-4 py-3 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition"
                 />
               </div>
+
+              {/* Skill 专属：使用场景 */}
+              {form.type === 'skill' && (
+                <div className="mb-4">
+                  <label className="block text-sm text-slate-400 mb-1.5">
+                    使用场景 <span className="text-slate-600">（告诉 AI 何时调用，可选）</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.usage}
+                    onChange={(e) => setForm({ ...form, usage: e.target.value })}
+                    placeholder="例如：需要将中文翻译为英文时调用"
+                    className="w-full px-4 py-3 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition"
+                  />
+                </div>
+              )}
+
+              {/* Skill 专属：分类 */}
+              {form.type === 'skill' && (
+                <div className="mb-4">
+                  <label className="block text-sm text-slate-400 mb-1.5">
+                    分类 <span className="text-slate-600">（可选）</span>
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, category: '' })}
+                      className={`px-3 py-1.5 text-xs rounded-lg border transition ${
+                        form.category === ''
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                          : 'bg-slate-900/40 text-slate-500 border-slate-800 hover:text-slate-400'
+                      }`}
+                    >
+                      不指定
+                    </button>
+                    {CATEGORY_OPTIONS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setForm({ ...form, category: c })}
+                        className={`px-3 py-1.5 text-xs rounded-lg border transition ${
+                          form.category === c
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                            : 'bg-slate-900/40 text-slate-500 border-slate-800 hover:text-slate-400'
+                        }`}
+                      >
+                        {SKILL_CATEGORY_LABELS[c]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="mb-4">
                 <label className="block text-sm text-slate-400 mb-1.5">内容</label>
                 <textarea
@@ -371,6 +525,23 @@ export default function MemoryPanel({
                   className="w-full px-4 py-3 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition resize-y font-mono text-sm leading-relaxed"
                 />
               </div>
+
+              {/* Skill 专属：示例 */}
+              {form.type === 'skill' && (
+                <div className="mb-4">
+                  <label className="block text-sm text-slate-400 mb-1.5">
+                    示例 <span className="text-slate-600">（每行一条，复制为 Prompt 时会附带，可选）</span>
+                  </label>
+                  <textarea
+                    value={form.examples}
+                    onChange={(e) => setForm({ ...form, examples: e.target.value })}
+                    placeholder={'每行一个示例输入或示例提示词\n例如：请把这段话翻译成英文：今天天气真好'}
+                    rows={3}
+                    className="w-full px-4 py-3 bg-slate-950/60 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 transition resize-y font-mono text-sm leading-relaxed"
+                  />
+                </div>
+              )}
+
               <div className="mb-5">
                 <label className="block text-sm text-slate-400 mb-1.5">
                   标签（用逗号分隔，可选）
@@ -439,7 +610,7 @@ export default function MemoryPanel({
             <h3 className="text-xl font-semibold text-slate-300 mb-2">
               还没有任何记忆
             </h3>
-            <p className="text-slate-600 mb-8 max-w-sm mx-auto">
+            <p className="text-slate-500 mb-8 max-w-sm mx-auto leading-relaxed">
               把你的所思所想、知识笔记、AI 提示词都存到这里，打造属于你自己的 AI 记忆库。
             </p>
             <div className="flex gap-3 justify-center">
@@ -456,6 +627,14 @@ export default function MemoryPanel({
                 ⚡ 添加 Skill
               </button>
             </div>
+            {onShowGuide && (
+              <button
+                onClick={onShowGuide}
+                className="mt-4 text-sm text-purple-400 hover:text-purple-300 transition"
+              >
+                不知道怎么开始？查看使用说明 →
+              </button>
+            )}
           </div>
         )}
 
@@ -482,6 +661,9 @@ export default function MemoryPanel({
             {filteredMemories.map((mem) => {
               const type = mem.meta?.type || 'memory';
               const isSkill = type === 'skill';
+              const categoryLabel = mem.meta?.category
+                ? SKILL_CATEGORY_LABELS[mem.meta.category] || mem.meta.category
+                : '';
               return (
                 <div
                   key={mem.key}
@@ -492,10 +674,10 @@ export default function MemoryPanel({
                   }`}
                 >
                   {/* 类型标识 */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-start justify-between mb-3 gap-3">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                       <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md ${
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md flex-shrink-0 ${
                           isSkill
                             ? 'bg-amber-500/15 text-amber-300'
                             : 'bg-purple-500/15 text-purple-300'
@@ -503,11 +685,25 @@ export default function MemoryPanel({
                       >
                         {isSkill ? '⚡ Skill' : '📝 记忆'}
                       </span>
-                      <h3 className="text-lg font-semibold text-slate-200">
+                      {isSkill && categoryLabel && (
+                        <span className="inline-flex px-2 py-0.5 text-[11px] font-medium rounded-md bg-slate-800/80 text-slate-400 border border-slate-700/60 flex-shrink-0">
+                          {categoryLabel}
+                        </span>
+                      )}
+                      <h3 className="text-lg font-semibold text-slate-100 break-words">
                         {mem.meta?.title || '未命名'}
                       </h3>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
+                      {isSkill && (
+                        <button
+                          onClick={() => handleCopyPrompt(mem)}
+                          title="复制为 AI Prompt"
+                          className="px-2.5 py-1.5 text-xs text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/10 rounded-lg transition"
+                        >
+                          {copiedKey === mem.key ? '✓ 已复制' : '📋 复制 Prompt'}
+                        </button>
+                      )}
                       <button
                         onClick={() => openEditForm(mem)}
                         className="px-2.5 py-1.5 text-sm text-slate-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg transition"
@@ -530,10 +726,37 @@ export default function MemoryPanel({
                     </div>
                   </div>
 
+                  {/* 使用场景（Skill 专属） */}
+                  {isSkill && mem.meta?.usage && (
+                    <div className="mb-3 text-xs text-amber-200/70 bg-amber-500/5 border border-amber-500/10 rounded-lg px-3 py-2 leading-relaxed">
+                      <span className="text-amber-300/80 font-medium">使用场景：</span>
+                      {mem.meta.usage}
+                    </div>
+                  )}
+
                   {/* 内容 */}
-                  <p className="text-slate-400 leading-relaxed whitespace-pre-wrap break-words text-sm">
+                  <p className="text-slate-300 leading-7 whitespace-pre-wrap break-words text-[15px]">
                     {mem.value}
                   </p>
+
+                  {/* 示例（Skill 专属，折叠） */}
+                  {isSkill && mem.meta?.examples && mem.meta.examples.length > 0 && (
+                    <details className="mt-3 group/details">
+                      <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-400 transition select-none">
+                        示例（{mem.meta.examples.length} 条）· 点击展开
+                      </summary>
+                      <ul className="mt-2 space-y-1 pl-1">
+                        {mem.meta.examples.map((ex, i) => (
+                          <li
+                            key={i}
+                            className="text-xs text-slate-400 leading-relaxed border-l-2 border-amber-500/20 pl-3"
+                          >
+                            {ex}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
 
                   {/* 标签 + 时间 */}
                   <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
