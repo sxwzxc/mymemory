@@ -210,6 +210,35 @@ export default function Guide({ apiHost, onBack }: GuideProps) {
           </div>
         </section>
 
+        {/* 让 AI 学会调用记忆库 */}
+        <section id="ai-prompt" className="scroll-mt-20">
+          <h2 className="text-xl font-semibold text-slate-100 mb-1">让 AI 学会调用你的记忆库</h2>
+          <p className="text-slate-500 text-sm mb-4">
+            复制下方提示词粘贴到任意 AI 工具（ChatGPT / Claude / Cursor 等），AI 就能通过 API 读取你的记忆、写入新记忆，实现跨会话的「永久记忆」。
+          </p>
+          <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-slate-200 text-sm font-medium">一键复制 AI 提示词</p>
+                <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                  提示词已包含完整的接口说明与使用规则，AI 读完即懂如何调用。
+                </p>
+              </div>
+              <PromptButton host={host} />
+            </div>
+            <div className="pt-3 border-t border-slate-800 space-y-3">
+              <p className="text-xs text-slate-500">使用步骤：</p>
+              <ol className="text-slate-400 text-xs space-y-1.5 leading-relaxed list-decimal list-inside">
+                <li>在「API Keys」页面创建一个 API Key（格式：<code className="text-purple-300 bg-slate-950/60 px-1 py-0.5 rounded">mm_xxxxxxxx</code>）</li>
+                <li>点击上方按钮复制提示词</li>
+                <li>把提示词中的 <code className="text-amber-300 bg-slate-950/60 px-1 py-0.5 rounded">YOUR_API_KEY</code> 替换为你的真实 API Key</li>
+                <li>粘贴到 AI 工具的对话框，开始对话</li>
+                <li>之后你让 AI 记住什么，它会自动通过 API 写入你的记忆库；下次开新对话，AI 会先拉取你的记忆恢复上下文</li>
+              </ol>
+            </div>
+          </div>
+        </section>
+
         {/* 备份与迁移 */}
         <section id="backup" className="scroll-mt-20">
           <h2 className="text-xl font-semibold text-slate-100 mb-1">备份与迁移</h2>
@@ -249,6 +278,129 @@ export default function Guide({ apiHost, onBack }: GuideProps) {
           AI 记忆库 · 让知识与技能在 AI 时代流动起来
         </footer>
       </div>
+    </div>
+  );
+}
+
+// 一键复制「让 AI 调用记忆库」的提示词按钮
+function PromptButton({ host }: { host: string }) {
+  const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const prompt = `你是一个拥有「长期记忆」能力的 AI 助手。你可以通过调用一组 HTTP API 来读取和写入用户的记忆库，从而在跨会话时保留上下文。
+
+# 记忆库 API 说明
+
+基地址：${host}
+认证方式：所有请求必须在 HTTP Header 中携带
+  Authorization: Bearer YOUR_API_KEY
+（请用户把 YOUR_API_KEY 替换为自己在「API Keys」页面创建的真实密钥，格式为 mm_ 开头的字符串）
+
+## 可用接口
+
+1. 列出全部记忆
+   GET ${host}/api/memories
+   返回：{ items: [{ key, value, meta }], count }
+
+2. 获取单条记忆
+   GET ${host}/api/memories/get?key=<KEY>
+   返回：{ key, value, meta }
+
+3. 新增 / 更新记忆（upsert，按 key 覆盖）
+   POST ${host}/api/memories/set
+   Header: Content-Type: application/json
+   Body: {
+     "key": "唯一标识，仅字母数字下划线连字符，1-128 位",
+     "value": "内容字符串，最大 256KB",
+     "meta": {
+       "title": "标题",
+       "tags": ["标签1", "标签2"],
+       "type": "memory" 或 "skill",
+       "usage": "使用场景（skill 类型推荐）",
+       "examples": ["示例1", "示例2"],
+       "category": "分类"
+     }
+   }
+   返回：{ message: "记忆已保存", key }
+
+4. 删除单条记忆
+   DELETE ${host}/api/memories/delete?key=<KEY>
+
+5. 导出全部为 JSON
+   GET ${host}/api/memories/export
+
+6. 批量导入
+   POST ${host}/api/memories/import
+   Body: { items: [{ key, value, meta }] }
+   策略：同 key 自动跳过不覆盖
+
+# 使用规则
+
+1. 会话开始时：主动调用 GET /api/memories 拉取用户已有记忆，作为本次对话的上下文背景。
+2. 用户说「记住 xxx」「保存这个」「记下来」时：调用 POST /api/memories/set 把内容写入记忆库。
+   - key 用语义化命名，如 memory_xxx_xxxxxx 或 skill_xxx_xxxxxx
+   - type 区分：用户要记住的笔记/事实用 memory；用户要保存的提示词/技能用 skill
+   - title 用一句话概括内容
+   - tags 给 2-4 个关键词便于检索
+3. 用户说「我之前说过什么」「你还记得吗」时：调用 GET /api/memories 搜索已有记忆回答。
+4. 用户说「忘掉 xxx」「删除」时：先 GET 找到对应 key，再 DELETE 删除。
+5. 不要把会话临时上下文当作记忆，只有用户明确要求保存的才写入。
+6. 写入时如果用户没给 title，请根据内容自动生成一个简洁标题。
+7. 如果 API 返回 401，提醒用户检查 API Key 是否正确或已过期。
+8. 如果 API 返回 400（如超容量），如实告诉用户限制：单用户最多 2000 条，单条最大 256KB。
+
+# 行为示例
+
+用户：「记住我下周三要参加架构评审会」
+你的动作：POST /api/memories/set
+  key: "memory_schedule_1782500000001"
+  value: "下周三要参加架构评审会"
+  meta: { title: "架构评审会日程", tags: ["日程","会议"], type: "memory" }
+然后回复：「已记住，下周三的架构评审会已存入记忆库。」
+
+用户：「我之前让你记的事还记得吗？」
+你的动作：GET /api/memories
+然后基于返回内容回答。
+
+用户：「帮我保存一个翻译 Skill」
+你的动作：POST /api/memories/set
+  meta.type: "skill"
+  meta.usage / examples / category 也一并填写
+然后回复保存结果。
+
+现在请确认你已理解以上规则，并告诉用户：你可以帮他记住任何事，并跨会话保留。`;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <div className="flex gap-2">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="px-3 py-2 bg-slate-800/60 text-slate-300 rounded-xl font-medium hover:bg-slate-700/60 transition text-sm border border-slate-700/40"
+        >
+          {expanded ? '隐藏' : '预览'}
+        </button>
+        <button
+          onClick={handleCopy}
+          className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium hover:from-purple-500 hover:to-pink-500 transition-all shadow-lg shadow-purple-500/25 text-sm"
+        >
+          {copied ? '✓ 已复制' : '📋 复制提示词'}
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-2 w-full">
+          <CodeBlock>{prompt}</CodeBlock>
+        </div>
+      )}
     </div>
   );
 }
