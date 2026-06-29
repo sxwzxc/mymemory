@@ -296,6 +296,68 @@ function PromptButton({ host }: { host: string }) {
   Authorization: Bearer YOUR_API_KEY
 （请用户把 YOUR_API_KEY 替换为自己在「API Keys」页面创建的真实密钥，格式为 mm_ 开头的字符串）
 
+## ⚠️ 编码要求（非常重要）
+
+请求体中的中文必须以 UTF-8 编码发送，否则中文会变成问号 ?。
+
+正确做法：
+1. POST/PUT 请求必须设置 Header：
+     Content-Type: application/json; charset=utf-8
+2. 请求体 JSON 字符串必须用 UTF-8 编码为字节流后再发送。
+3. 绝对不能把中文字符串按 Latin-1 / ISO-8859-1 / ASCII 编码发送，那会导致所有非 ASCII 字符变成 ? 或乱码。
+
+## 各语言的正确调用方式
+
+### Python（requests 库）
+\`\`\`python
+import requests, json
+
+url = "${host}/api/memories/set"
+headers = {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json; charset=utf-8"
+}
+data = {
+    "key": "memory_test_001",
+    "value": "这是一段中文内容，会被正确保存",
+    "meta": {"title": "测试", "type": "memory", "tags": ["测试"]}
+}
+# 关键：json 参数会自动用 UTF-8 编码
+resp = requests.post(url, headers=headers, json=data)
+# 或者手动编码（等价写法）：
+# resp = requests.post(url, headers=headers, data=json.dumps(data, ensure_ascii=False).encode("utf-8"))
+print(resp.json())
+\`\`\`
+
+### JavaScript / Node.js（fetch）
+\`\`\`javascript
+const res = await fetch("${host}/api/memories/set", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json; charset=utf-8"
+  },
+  body: JSON.stringify({
+    key: "memory_test_001",
+    value: "这是一段中文内容，会被正确保存",
+    meta: { title: "测试", type: "memory", tags: ["测试"] }
+  })
+});
+const data = await res.json();
+console.log(data);
+\`\`\`
+
+### curl
+\`\`\`bash
+curl -X POST "${host}/api/memories/set" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json; charset=utf-8" \\
+  -d '{"key":"memory_test_001","value":"这是一段中文内容","meta":{"title":"测试","type":"memory"}}'
+\`\`\`
+
+### 验证编码是否正确
+写入后立即用 GET 读回，如果中文正常显示说明编码正确；如果中文全变成 ? 说明编码错误，需要检查请求体是否以 UTF-8 编码发送。
+
 ## 可用接口
 
 1. 列出全部记忆
@@ -308,7 +370,7 @@ function PromptButton({ host }: { host: string }) {
 
 3. 新增 / 更新记忆（upsert，按 key 覆盖）
    POST ${host}/api/memories/set
-   Header: Content-Type: application/json
+   Header: Content-Type: application/json; charset=utf-8
    Body: {
      "key": "唯一标识，仅字母数字下划线连字符，1-128 位",
      "value": "内容字符串，最大 256KB",
@@ -348,11 +410,12 @@ function PromptButton({ host }: { host: string }) {
 6. 写入时如果用户没给 title，请根据内容自动生成一个简洁标题。
 7. 如果 API 返回 401，提醒用户检查 API Key 是否正确或已过期。
 8. 如果 API 返回 400（如超容量），如实告诉用户限制：单用户最多 2000 条，单条最大 256KB。
+9. 【编码】每次写入后立即读取验证，确认中文未变成 ?。若发现乱码，改用 UTF-8 编码重新发送（参考上方各语言示例）。
 
 # 行为示例
 
 用户：「记住我下周三要参加架构评审会」
-你的动作：POST /api/memories/set
+你的动作：POST /api/memories/set（注意 Content-Type 要带 charset=utf-8，body 用 UTF-8 编码）
   key: "memory_schedule_1782500000001"
   value: "下周三要参加架构评审会"
   meta: { title: "架构评审会日程", tags: ["日程","会议"], type: "memory" }
@@ -363,7 +426,7 @@ function PromptButton({ host }: { host: string }) {
 然后基于返回内容回答。
 
 用户：「帮我保存一个翻译 Skill」
-你的动作：POST /api/memories/set
+你的动作：POST /api/memories/set（UTF-8 编码！）
   meta.type: "skill"
   meta.usage / examples / category 也一并填写
 然后回复保存结果。
