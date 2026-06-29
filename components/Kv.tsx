@@ -81,6 +81,13 @@ export default function MemoryPanel({
   // 复制提示词反馈
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // 展开状态：null = 全部收起，Set<string> = 展开的 key 集合
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  // header 显隐控制（滚动时收起）
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
   const fetchMemories = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -97,6 +104,27 @@ export default function MemoryPanel({
   useEffect(() => {
     fetchMemories();
   }, [fetchMemories]);
+
+  // 滚动监听：向下滚动收起 header，向上滚动显示
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      const prevY = lastScrollY.current;
+      // 顶部 50px 内永远显示
+      if (currentY < 50) {
+        setHeaderVisible(true);
+      } else if (currentY > prevY + 8) {
+        // 向下滚动超过 8px，收起
+        setHeaderVisible(false);
+      } else if (currentY < prevY - 8) {
+        // 向上滚动超过 8px，显示
+        setHeaderVisible(true);
+      }
+      lastScrollY.current = currentY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const openCreateForm = (type: ItemType = 'memory') => {
     setEditingKey(null);
@@ -190,11 +218,18 @@ export default function MemoryPanel({
     }
   };
 
+  // 删除：本地更新，保持滚动位置（不重新拉取列表）
   const handleDelete = async (key: string) => {
     try {
       setDeletingKey(key);
       await deleteMemory(key);
-      await fetchMemories();
+      // 本地移除，避免重新 fetch 导致滚动位置丢失
+      setMemories((prev) => prev.filter((m) => m.key !== key));
+      setExpandedKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
     } catch (err: any) {
       setError(err.message || '删除失败');
     } finally {
@@ -295,6 +330,28 @@ export default function MemoryPanel({
     }
   };
 
+  // 展开/收起单条
+  const toggleExpand = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // 全部展开/收起
+  const allExpanded =
+    filteredMemories.length > 0 &&
+    filteredMemories.every((m) => expandedKeys.has(m.key));
+  const toggleAll = () => {
+    if (allExpanded) {
+      setExpandedKeys(new Set());
+    } else {
+      setExpandedKeys(new Set(filteredMemories.map((m) => m.key)));
+    }
+  };
+
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/40 to-slate-950 flex items-center justify-center p-4">
@@ -321,8 +378,12 @@ export default function MemoryPanel({
         <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-pink-600/8 rounded-full blur-3xl" />
       </div>
 
-      {/* 顶部导航 */}
-      <header className="sticky top-0 z-20 backdrop-blur-2xl bg-slate-950/60 border-b border-slate-800/60">
+      {/* 顶部导航（滚动时收起） */}
+      <header
+        className={`sticky top-0 z-20 backdrop-blur-2xl bg-slate-950/60 border-b border-slate-800/60 transition-transform duration-300 ${
+          headerVisible ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -412,8 +473,8 @@ export default function MemoryPanel({
             </div>
           )}
 
-          {/* 搜索栏 */}
-          <div className="mt-4 flex gap-2">
+          {/* 搜索栏 + 全部展开/收起 */}
+          <div className="mt-4 flex gap-2 items-center">
             <div className="relative flex-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
                 🔍
@@ -423,9 +484,27 @@ export default function MemoryPanel({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="搜索标题、内容、标签或使用场景..."
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition"
+                className="w-full pl-9 pr-9 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-600 text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition"
               />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition text-sm"
+                  title="清除搜索"
+                >
+                  ✕
+                </button>
+              )}
             </div>
+            {filteredMemories.length > 0 && (
+              <button
+                onClick={toggleAll}
+                className="px-3 py-2.5 bg-slate-800/60 text-slate-300 rounded-xl font-medium hover:bg-slate-700/60 transition text-sm border border-slate-700/40 whitespace-nowrap"
+                title={allExpanded ? '收起全部条目' : '展开全部条目'}
+              >
+                {allExpanded ? '收起全部' : '展开全部'}
+              </button>
+            )}
           </div>
 
           {/* 筛选标签 */}
@@ -735,27 +814,31 @@ export default function MemoryPanel({
           </div>
         )}
 
-        {/* 记忆列表 */}
+        {/* 记忆列表（默认收起，点击展开） */}
         {!isLoading && filteredMemories.length > 0 && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {filteredMemories.map((mem) => {
               const type = mem.meta?.type || 'memory';
               const isSkill = type === 'skill';
               const categoryLabel = mem.meta?.category
                 ? SKILL_CATEGORY_LABELS[mem.meta.category] || mem.meta.category
                 : '';
+              const expanded = expandedKeys.has(mem.key);
               return (
                 <div
                   key={mem.key}
-                  className={`group relative bg-slate-900/50 backdrop-blur border rounded-2xl p-6 transition-all hover:shadow-2xl hover:shadow-purple-500/5 hover:-translate-y-0.5 ${
+                  className={`group relative bg-slate-900/50 backdrop-blur border rounded-2xl transition-all hover:shadow-2xl hover:shadow-purple-500/5 ${
                     isSkill
                       ? 'border-amber-500/20 hover:border-amber-500/40'
                       : 'border-slate-800/60 hover:border-purple-500/40'
                   }`}
                 >
-                  {/* 类型标识 */}
-                  <div className="flex items-start justify-between mb-3 gap-3">
-                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  {/* 卡片头部（始终可见，点击展开/收起） */}
+                  <button
+                    onClick={() => toggleExpand(mem.key)}
+                    className="w-full text-left p-5 flex items-start justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md flex-shrink-0 ${
                           isSkill
@@ -770,99 +853,124 @@ export default function MemoryPanel({
                           {categoryLabel}
                         </span>
                       )}
-                      <h3 className="text-lg font-semibold text-slate-100 break-words">
+                      <h3 className="text-base font-semibold text-slate-100 break-words">
                         {mem.meta?.title || '未命名'}
                       </h3>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
-                      {isSkill && (
-                        <button
-                          onClick={() => handleCopyPrompt(mem)}
-                          title="复制为 AI Prompt"
-                          className="px-2.5 py-1.5 text-xs text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/10 rounded-lg transition"
-                        >
-                          {copiedKey === mem.key ? '✓ 已复制' : '📋 复制 Prompt'}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => openEditForm(mem)}
-                        className="px-2.5 py-1.5 text-sm text-slate-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg transition"
-                        title="编辑"
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* 操作按钮（阻止冒泡） */}
+                      <div
+                        className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        ✏️
-                      </button>
-                      <button
-                        onClick={() => handleDelete(mem.key)}
-                        disabled={deletingKey === mem.key}
-                        className="px-2.5 py-1.5 text-sm text-slate-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition disabled:opacity-50"
-                        title="删除"
-                      >
-                        {deletingKey === mem.key ? (
-                          <span className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin inline-block" />
-                        ) : (
-                          '🗑️'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 使用场景（Skill 专属） */}
-                  {isSkill && mem.meta?.usage && (
-                    <div className="mb-3 text-xs text-amber-200/70 bg-amber-500/5 border border-amber-500/10 rounded-lg px-3 py-2 leading-relaxed">
-                      <span className="text-amber-300/80 font-medium">使用场景：</span>
-                      {mem.meta.usage}
-                    </div>
-                  )}
-
-                  {/* 内容 */}
-                  <p className="text-slate-300 leading-7 whitespace-pre-wrap break-words text-[15px]">
-                    {mem.value}
-                  </p>
-
-                  {/* 示例（Skill 专属，折叠） */}
-                  {isSkill && mem.meta?.examples && mem.meta.examples.length > 0 && (
-                    <details className="mt-3 group/details">
-                      <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-400 transition select-none">
-                        示例（{mem.meta.examples.length} 条）· 点击展开
-                      </summary>
-                      <ul className="mt-2 space-y-1 pl-1">
-                        {mem.meta.examples.map((ex, i) => (
-                          <li
-                            key={i}
-                            className="text-xs text-slate-400 leading-relaxed border-l-2 border-amber-500/20 pl-3"
+                        {isSkill && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyPrompt(mem);
+                            }}
+                            title="复制为 AI Prompt"
+                            className="px-2.5 py-1.5 text-xs text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/10 rounded-lg transition"
                           >
-                            {ex}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-
-                  {/* 标签 + 时间 */}
-                  <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
-                    <div className="flex flex-wrap gap-1.5">
-                      {(mem.meta?.tags || []).map((tag, i) => (
-                        <span
-                          key={i}
-                          className={`px-2 py-0.5 text-xs font-medium rounded-full border ${
-                            isSkill
-                              ? 'bg-amber-500/10 text-amber-400/80 border-amber-500/20'
-                              : 'bg-purple-500/10 text-purple-400/80 border-purple-500/20'
-                          }`}
+                            {copiedKey === mem.key ? '✓ 已复制' : '📋 Prompt'}
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditForm(mem);
+                          }}
+                          className="px-2.5 py-1.5 text-sm text-slate-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg transition"
+                          title="编辑"
                         >
-                          #{tag}
-                        </span>
-                      ))}
+                          ✏️
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(mem.key);
+                          }}
+                          disabled={deletingKey === mem.key}
+                          className="px-2.5 py-1.5 text-sm text-slate-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition disabled:opacity-50"
+                          title="删除"
+                        >
+                          {deletingKey === mem.key ? (
+                            <span className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin inline-block" />
+                          ) : (
+                            '🗑️'
+                          )}
+                        </button>
+                      </div>
+                      <span
+                        className={`text-slate-500 text-sm transition-transform duration-200 ${
+                          expanded ? 'rotate-90' : ''
+                        }`}
+                      >
+                        ▸
+                      </span>
                     </div>
-                    <div className="text-xs text-slate-600 flex items-center gap-2">
-                      {mem.meta?.updatedAt && (
-                        <span>编辑于 {formatDate(mem.meta.updatedAt)}</span>
+                  </button>
+
+                  {/* 展开内容 */}
+                  {expanded && (
+                    <div className="px-5 pb-5 -mt-1 animate-in fade-in">
+                      {/* 使用场景（Skill 专属） */}
+                      {isSkill && mem.meta?.usage && (
+                        <div className="mb-3 text-xs text-amber-200/70 bg-amber-500/5 border border-amber-500/10 rounded-lg px-3 py-2 leading-relaxed">
+                          <span className="text-amber-300/80 font-medium">使用场景：</span>
+                          {mem.meta.usage}
+                        </div>
                       )}
-                      {!mem.meta?.updatedAt && mem.meta?.createdAt && (
-                        <span>{formatDate(mem.meta.createdAt)}</span>
+
+                      {/* 内容 */}
+                      <p className="text-slate-300 leading-7 whitespace-pre-wrap break-words text-[15px]">
+                        {mem.value}
+                      </p>
+
+                      {/* 示例（Skill 专属） */}
+                      {isSkill && mem.meta?.examples && mem.meta.examples.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs text-slate-500 mb-1.5">示例（{mem.meta.examples.length} 条）</p>
+                          <ul className="space-y-1 pl-1">
+                            {mem.meta.examples.map((ex, i) => (
+                              <li
+                                key={i}
+                                className="text-xs text-slate-400 leading-relaxed border-l-2 border-amber-500/20 pl-3"
+                              >
+                                {ex}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       )}
+
+                      {/* 标签 + 时间 */}
+                      <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
+                        <div className="flex flex-wrap gap-1.5">
+                          {(mem.meta?.tags || []).map((tag, i) => (
+                            <span
+                              key={i}
+                              className={`px-2 py-0.5 text-xs font-medium rounded-full border ${
+                                isSkill
+                                  ? 'bg-amber-500/10 text-amber-400/80 border-amber-500/20'
+                                  : 'bg-purple-500/10 text-purple-400/80 border-purple-500/20'
+                              }`}
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="text-xs text-slate-600 flex items-center gap-2">
+                          {mem.meta?.updatedAt && (
+                            <span>编辑于 {formatDate(mem.meta.updatedAt)}</span>
+                          )}
+                          {!mem.meta?.updatedAt && mem.meta?.createdAt && (
+                            <span>{formatDate(mem.meta.createdAt)}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
